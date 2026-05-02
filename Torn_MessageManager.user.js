@@ -5,9 +5,9 @@
 // @description  MessageManager - Tampermonkey userscript to manage message templates and auto-fill Torn compose page. Adds floating settings button with lock-in-place feature. Other behavior unchanged from prior version.
 // @author       ShavedW00kie
 // @homepageURL  https://github.com/ShavedW00kie
-// @downloadURL  https://raw.githubusercontent.com/ShavedW00kie/ChainAttackCoordinator/main/ChainAttackCoordinator.user.js
-// @updateURL    https://raw.githubusercontent.com/ShavedW00kie/ChainAttackCoordinator/main/ChainAttackCoordinator.meta.js
-// @supportURL   https://github.com/ShavedW00kie/ChainAttackCoordinator/issues
+// @downloadURL  https://github.com/ShavedW00kie/MessageManager/blob/main/Torn_MessageManager.user.js
+// @updateURL    https://github.com/ShavedW00kie/MessageManager/blob/main/Torn_MessageManager.user.js
+// @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
 // @license      BSD-3-Clause license
 // @match        https://www.torn.com/messages.php*
 // @grant        GM_getValue
