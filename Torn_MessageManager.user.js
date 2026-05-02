@@ -8,8 +8,7 @@
 // @downloadURL  https://raw.githubusercontent.com/ShavedW00kie/ChainAttackCoordinator/main/ChainAttackCoordinator.user.js
 // @updateURL    https://raw.githubusercontent.com/ShavedW00kie/ChainAttackCoordinator/main/ChainAttackCoordinator.meta.js
 // @supportURL   https://github.com/ShavedW00kie/ChainAttackCoordinator/issues
-
-// @license      
+// @license      BSD-3-Clause license
 // @match        https://www.torn.com/messages.php*
 // @grant        GM_getValue
 // @grant        GM_setValue
