@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         MessageManager for Torn (Floating Settings Button + Lock)
 // @namespace    https://www.torn.com/
-// @version      1.3.2
+// @version      1.3.3
 // @description  MessageManager - Tampermonkey userscript to manage message templates and auto-fill Torn compose page. Adds floating settings button with lock-in-place feature.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
-// @downloadURL  https://raw.githubusercontent.com/ShavedW00kie/MessageManager/main/Torn_MessageManager.user.js
-// @updateURL    https://raw.githubusercontent.com/ShavedW00kie/MessageManager/main/Torn_MessageManager.user.js
+// @downloadURL  https://update.greasyfork.org/scripts/576403/MessageManager%20for%20Torn%20%28Floating%20Settings%20Button%20%2B%20Lock%29.user.js
+// @updateURL    https://update.greasyfork.org/scripts/576403/MessageManager%20for%20Torn%20%28Floating%20Settings%20Button%20%2B%20Lock%29.user.js
 // @license      BSD-3-Clause
 // @match        https://www.torn.com/messages.php*
 // @grant        GM_getValue
