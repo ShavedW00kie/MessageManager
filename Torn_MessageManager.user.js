@@ -57,22 +57,27 @@
   };
   const DEFAULT_FLOATING = { locked: false, x: null, y: null };
 
-  // ---------- Safe GM storage wrappers ----------
-  async function storageGet(key, fallback = null) {
-    try {
-      if (typeof GM_getValue === 'function') {
-        const val = GM_getValue(key);
-        return val === undefined ? fallback : val;
-      } else {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
-      }
-    } catch (err) {
-      console.error('MM storageGet error', err);
-      return fallback;
-    }
-  }
 
+
+   
+  // ---------- Safe GM storage wrappers ----------
+async function storageGet(key, fallback = null) {
+  try {
+    if (typeof GM_getValue === 'function') {
+      // GM_getValue may be sync or async depending on the manager; await handles both.
+      const val = await GM_getValue(key);
+      return val === undefined ? fallback : val;
+    } else {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    }
+  } catch (err) {
+    console.error('MM storageGet error', err);
+    return fallback;
+  }
+}
+
+   
   async function storageSet(key, value) {
     try {
       if (typeof GM_setValue === 'function') {
