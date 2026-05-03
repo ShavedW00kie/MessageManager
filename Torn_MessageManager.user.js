@@ -135,6 +135,161 @@
     setTimeout(check, 500);
   }
 
+  /* ===========================
+   Module: Support Banner for Settings Panel
+   Purpose: Prepend a dismissible support message to the top of the settings panel.
+   Usage: Call `await insertSupportBanner()` after the settings panel DOM exists.
+   Notes: Uses existing storageGet/storageSet if available; otherwise falls back to localStorage.
+   =========================== */
+
+async function insertSupportBanner() {
+  // Storage helpers: prefer existing storageGet/storageSet if defined in the script.
+  async function _get(key, fallback = null) {
+    try {
+      if (typeof storageGet === 'function') {
+        const v = await storageGet(key, fallback);
+        return v === undefined ? fallback : v;
+      }
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (err) {
+      console.error('SupportBanner _get error', err);
+      return fallback;
+    }
+  }
+  async function _set(key, value) {
+    try {
+      if (typeof storageSet === 'function') {
+        await storageSet(key, value);
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+      console.error('SupportBanner _set error', err);
+    }
+  }
+
+  const BANNER_KEY = 'MM_support_banner_v1';
+  const dismissed = await _get(BANNER_KEY, { dismissed: false });
+
+  // If already dismissed, do nothing
+  if (dismissed && dismissed.dismissed) return;
+
+  // Ensure settings panel exists
+  const panel = document.getElementById('mm-settings-panel');
+  if (!panel) {
+    console.warn('SupportBanner: settings panel not found; call insertSupportBanner after buildSettingsPanel()');
+    return;
+  }
+
+  // Avoid duplicate banner
+  if (panel.querySelector('.mm-support-banner')) return;
+
+  // Inject CSS for banner (scoped)
+  const styleId = 'mm-support-banner-style';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .mm-support-banner {
+        display:flex;
+        gap:10px;
+        align-items:flex-start;
+        justify-content:space-between;
+        background: linear-gradient(180deg,#0f2b0f,#071207);
+        border: 1px solid rgba(0,120,0,0.18);
+        color: #dfffe0;
+        padding: 8px 10px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        font-size: 13px;
+      }
+      .mm-support-banner .mm-support-text {
+        flex:1;
+        line-height:1.3;
+        color: #e6ffe6;
+      }
+      .mm-support-banner .mm-support-text a {
+        color: #bfffbf;
+        text-decoration: underline;
+      }
+      .mm-support-banner .mm-support-actions {
+        margin-left: 12px;
+        display:flex;
+        gap:6px;
+        align-items:center;
+      }
+      .mm-support-banner button.mm-support-close {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.06);
+        color: #dfffe0;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .mm-support-banner button.mm-support-close:hover {
+        background: rgba(255,255,255,0.02);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Build banner element
+  const banner = document.createElement('div');
+  banner.className = 'mm-support-banner';
+  banner.setAttribute('role', 'region');
+  banner.setAttribute('aria-label', 'Support message for MessageManager');
+
+  // Text content (exact requested wording)
+  const text = document.createElement('div');
+  text.className = 'mm-support-text';
+  // Use safe text nodes and a link element
+  const prefix = document.createTextNode('If this is useful to you & you like it, send a Xanax to ');
+  const link = document.createElement('a');
+  link.href = 'https://www.torn.com/profiles.php?XID=2954173';
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = 'ThaWookie [2954173]';
+  const suffix = document.createTextNode(' ^_^');
+
+  text.appendChild(prefix);
+  text.appendChild(link);
+  text.appendChild(suffix);
+
+  // Actions (dismiss)
+  const actions = document.createElement('div');
+  actions.className = 'mm-support-actions';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'mm-support-close';
+  closeBtn.type = 'button';
+  closeBtn.textContent = 'Dismiss';
+  closeBtn.title = 'Dismiss this message (will be remembered)';
+
+  // Dismiss handler: hide and persist dismissal
+  closeBtn.addEventListener('click', async () => {
+    try {
+      banner.remove();
+      await _set(BANNER_KEY, { dismissed: true });
+    } catch (err) {
+      console.error('SupportBanner dismiss error', err);
+    }
+  });
+
+  actions.appendChild(closeBtn);
+
+  // Append to banner and prepend to panel content
+  banner.appendChild(text);
+  banner.appendChild(actions);
+
+  // Insert at top of panel content (before first child)
+  if (panel.firstChild) {
+    panel.insertBefore(banner, panel.firstChild);
+  } else {
+    panel.appendChild(banner);
+  }
+}
+ 
   // ---------- CSS injection ----------
   GM_addStyle(`
     /* MessageManager styles */
@@ -752,6 +907,7 @@
       const state = await ensureState();
       await injectSidebarButton(state);
       await buildSettingsPanel(state);
+      await insertSupportBanner(); 
       await observeComposePage();
 
       if (typeof GM_registerMenuCommand === 'function') {
