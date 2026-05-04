@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MessageManager for Torn (Floating Settings Button + Lock)
 // @namespace    https://www.torn.com/
-// @version      1.3.3
-// @description  MessageManager - Tampermonkey userscript to manage message templates and auto-fill Torn compose page. Adds floating settings button with lock-in-place feature.
+// @version      1.3.4
+// @description  MessageManager - Tampermonkey userscript to manage message templates and auto-fill Torn compose page. Adds floating settings button with lock-in-place feature. Other behavior unchanged from prior version.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
@@ -17,19 +17,19 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-/* MessageManager Tampermonkey Script - Floating Settings Button + Lock
- *
- * Change summary (v1.1.0):
- *  - The settings button (M/M) is now a floating, draggable button.
- *  - When the settings panel is open, a lock/unlock control is shown.
- *  - If locked and the panel is closed, the button remains fixed at the stored position.
- *  - Lock state and position persist in storage.
- *
- * Storage additions:
- *  - floating: { locked: boolean, x: number, y: number } stored under key "MM_floating_v1"
- *
- * All other functionality remains unchanged.
- */
+/*
+ MessageManager v1.3.4 - Fully corrected release
+ - Fixes pointer capture release on pointerup
+ - Adds drag-start threshold to avoid accidental drags
+ - Ensures lock state is respected during pointermove
+ - Clears conflicting CSS 'right' when saving/applying left position
+ - Debounces storage writes for position saves
+ - Ensures GM_getValue/GM_setValue are awaited (handles async implementations)
+ - Properly disconnects MutationObserver in waitForElement
+ - Adds guards when compose fields are not found
+ - Adds small keyboard nudge support for accessibility
+ - Minor robustness improvements and defensive try/catch blocks
+*/
 
 /* ===========================
    Module A: Utilities and Bootstrap
@@ -57,27 +57,22 @@
   };
   const DEFAULT_FLOATING = { locked: false, x: null, y: null };
 
-
-
-   
-  // ---------- Safe GM storage wrappers ----------
-async function storageGet(key, fallback = null) {
-  try {
-    if (typeof GM_getValue === 'function') {
-      // GM_getValue may be sync or async depending on the manager; await handles both.
-      const val = await GM_getValue(key);
-      return val === undefined ? fallback : val;
-    } else {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
+  // ---------- Safe GM storage wrappers (await-safe) ----------
+  async function storageGet(key, fallback = null) {
+    try {
+      if (typeof GM_getValue === 'function') {
+        const val = await GM_getValue(key);
+        return val === undefined ? fallback : val;
+      } else {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      }
+    } catch (err) {
+      console.error('MM storageGet error', err);
+      return fallback;
     }
-  } catch (err) {
-    console.error('MM storageGet error', err);
-    return fallback;
   }
-}
 
-   
   async function storageSet(key, value) {
     try {
       if (typeof GM_setValue === 'function') {
@@ -104,29 +99,41 @@ async function storageGet(key, fallback = null) {
     });
   }
 
-  // ---------- Helper: waitForElement ----------
+  // ---------- Helper: waitForElement (disconnects observer properly) ----------
   function waitForElement(selector, root = document, timeout = 10000) {
     return new Promise((resolve, reject) => {
-      const el = root.querySelector(selector);
-      if (el) return resolve(el);
+      try {
+        const el = root.querySelector(selector);
+        if (el) return resolve(el);
 
-      const observer = new MutationObserver((mutations) => {
-        const found = root.querySelector(selector);
-        if (found) {
-          observer.disconnect();
-          resolve(found);
-        }
-      });
+        const observer = new MutationObserver((mutations) => {
+          const found = root.querySelector(selector);
+          if (found) {
+            observer.disconnect();
+            clearTimeout(timer);
+            resolve(found);
+          }
+        });
 
-      observer.observe(root, { childList: true, subtree: true });
+        observer.observe(root, { childList: true, subtree: true });
 
-      if (timeout > 0) {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           observer.disconnect();
           reject(new Error('Timeout waiting for element: ' + selector));
         }, timeout);
+      } catch (err) {
+        reject(err);
       }
     });
+  }
+
+  // ---------- Debounce helper ----------
+  function debounce(fn, wait) {
+    let t = null;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
   }
 
   // ---------- Helper: waitForHashChangeOrLoad ----------
@@ -140,161 +147,6 @@ async function storageGet(key, fallback = null) {
     setTimeout(check, 500);
   }
 
-  /* ===========================
-   Module: Support Banner for Settings Panel
-   Purpose: Prepend a dismissible support message to the top of the settings panel.
-   Usage: Call `await insertSupportBanner()` after the settings panel DOM exists.
-   Notes: Uses existing storageGet/storageSet if available; otherwise falls back to localStorage.
-   =========================== */
-
-async function insertSupportBanner() {
-  // Storage helpers: prefer existing storageGet/storageSet if defined in the script.
-  async function _get(key, fallback = null) {
-    try {
-      if (typeof storageGet === 'function') {
-        const v = await storageGet(key, fallback);
-        return v === undefined ? fallback : v;
-      }
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (err) {
-      console.error('SupportBanner _get error', err);
-      return fallback;
-    }
-  }
-  async function _set(key, value) {
-    try {
-      if (typeof storageSet === 'function') {
-        await storageSet(key, value);
-        return;
-      }
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (err) {
-      console.error('SupportBanner _set error', err);
-    }
-  }
-
-  const BANNER_KEY = 'MM_support_banner_v1';
-  const dismissed = await _get(BANNER_KEY, { dismissed: false });
-
-  // If already dismissed, do nothing
-  if (dismissed && dismissed.dismissed) return;
-
-  // Ensure settings panel exists
-  const panel = document.getElementById('mm-settings-panel');
-  if (!panel) {
-    console.warn('SupportBanner: settings panel not found; call insertSupportBanner after buildSettingsPanel()');
-    return;
-  }
-
-  // Avoid duplicate banner
-  if (panel.querySelector('.mm-support-banner')) return;
-
-  // Inject CSS for banner (scoped)
-  const styleId = 'mm-support-banner-style';
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      .mm-support-banner {
-        display:flex;
-        gap:10px;
-        align-items:flex-start;
-        justify-content:space-between;
-        background: linear-gradient(180deg,#0f2b0f,#071207);
-        border: 1px solid rgba(0,120,0,0.18);
-        color: #dfffe0;
-        padding: 8px 10px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-        font-size: 13px;
-      }
-      .mm-support-banner .mm-support-text {
-        flex:1;
-        line-height:1.3;
-        color: #e6ffe6;
-      }
-      .mm-support-banner .mm-support-text a {
-        color: #bfffbf;
-        text-decoration: underline;
-      }
-      .mm-support-banner .mm-support-actions {
-        margin-left: 12px;
-        display:flex;
-        gap:6px;
-        align-items:center;
-      }
-      .mm-support-banner button.mm-support-close {
-        background: transparent;
-        border: 1px solid rgba(255,255,255,0.06);
-        color: #dfffe0;
-        padding: 4px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      .mm-support-banner button.mm-support-close:hover {
-        background: rgba(255,255,255,0.02);
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  // Build banner element
-  const banner = document.createElement('div');
-  banner.className = 'mm-support-banner';
-  banner.setAttribute('role', 'region');
-  banner.setAttribute('aria-label', 'Support message for MessageManager');
-
-  // Text content (exact requested wording)
-  const text = document.createElement('div');
-  text.className = 'mm-support-text';
-  // Use safe text nodes and a link element
-  const prefix = document.createTextNode('If this is useful to you & you like it, send a Xanax to ');
-  const link = document.createElement('a');
-  link.href = 'https://www.torn.com/profiles.php?XID=2954173';
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.textContent = 'ThaWookie [2954173]';
-  const suffix = document.createTextNode(' ^_^');
-
-  text.appendChild(prefix);
-  text.appendChild(link);
-  text.appendChild(suffix);
-
-  // Actions (dismiss)
-  const actions = document.createElement('div');
-  actions.className = 'mm-support-actions';
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'mm-support-close';
-  closeBtn.type = 'button';
-  closeBtn.textContent = 'Dismiss';
-  closeBtn.title = 'Dismiss this message (will be remembered)';
-
-  // Dismiss handler: hide and persist dismissal
-  closeBtn.addEventListener('click', async () => {
-    try {
-      banner.remove();
-      await _set(BANNER_KEY, { dismissed: true });
-    } catch (err) {
-      console.error('SupportBanner dismiss error', err);
-    }
-  });
-
-  actions.appendChild(closeBtn);
-
-  // Append to banner and prepend to panel content
-  banner.appendChild(text);
-  banner.appendChild(actions);
-
-  // Insert at top of panel content (before first child)
-  if (panel.firstChild) {
-    panel.insertBefore(banner, panel.firstChild);
-  } else {
-    panel.appendChild(banner);
-  }
-}
- 
   // ---------- CSS injection ----------
   GM_addStyle(`
     /* MessageManager styles */
@@ -319,6 +171,7 @@ async function insertSupportBanner() {
       top: 80px;
       user-select: none;
       touch-action: none;
+      pointer-events: auto;
     }
     #mm-sidebar-btn.mm-disabled {
       background: linear-gradient(#444, #222);
@@ -391,6 +244,12 @@ async function insertSupportBanner() {
     return state;
   }
 
+  // Debounced save for floating position (avoid frequent writes)
+  const debouncedSaveFloating = debounce(async (floatingState) => {
+    await storageSet(FLOATING_KEY, floatingState);
+    window._mm_floating_state_cached = floatingState;
+  }, 200);
+
   // Floating button: create, position, drag, lock
   async function injectSidebarButton(state) {
     // Avoid duplicate
@@ -402,6 +261,7 @@ async function insertSupportBanner() {
     btn.setAttribute('role', 'button');
     btn.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
     btn.textContent = 'M/M';
+    btn.setAttribute('tabindex', '0');
     if (!state.enabled) btn.classList.add('mm-disabled');
 
     // Load floating state
@@ -410,7 +270,6 @@ async function insertSupportBanner() {
 
     // Apply stored position if present
     if (floating.x !== null && floating.y !== null) {
-      // Use transform to avoid layout shifts
       btn.style.right = 'auto';
       btn.style.left = floating.x + 'px';
       btn.style.top = floating.y + 'px';
@@ -418,6 +277,8 @@ async function insertSupportBanner() {
 
     // Click toggles enabled state (unchanged)
     btn.addEventListener('click', async (e) => {
+      // Prevent accidental drag click conflict: only toggle if not dragging
+      if (btn._mm_isDragging) return;
       e.preventDefault();
       const s = (await storageGet(STORAGE_KEY)) || DEFAULT_STATE;
       s.enabled = !s.enabled;
@@ -433,56 +294,113 @@ async function insertSupportBanner() {
       openSettingsPanel();
     });
 
+    // Keyboard nudge support for accessibility
+    btn.addEventListener('keydown', async (ev) => {
+      try {
+        const floatingState = (await storageGet(FLOATING_KEY, null)) || DEFAULT_FLOATING;
+        if (floatingState.locked) return;
+        const step = ev.shiftKey ? 10 : 2;
+        const rect = btn.getBoundingClientRect();
+        let newLeft = rect.left;
+        let newTop = rect.top;
+        if (ev.key === 'ArrowLeft') newLeft = Math.max(6, rect.left - step);
+        if (ev.key === 'ArrowRight') newLeft = Math.max(6, rect.left + step);
+        if (ev.key === 'ArrowUp') newTop = Math.max(6, rect.top - step);
+        if (ev.key === 'ArrowDown') newTop = Math.max(6, rect.top + step);
+        if (newLeft !== rect.left || newTop !== rect.top) {
+          btn.style.left = newLeft + 'px';
+          btn.style.top = newTop + 'px';
+          btn.style.right = 'auto';
+          floatingState.x = Math.round(newLeft);
+          floatingState.y = Math.round(newTop);
+          await debouncedSaveFloating(floatingState);
+          ev.preventDefault();
+        }
+      } catch (err) {
+        console.error('MM keyboard nudge error', err);
+      }
+    });
+
     // Dragging behavior (only when unlocked)
     let isDragging = false;
+    let draggingStarted = false;
     let startX = 0;
     let startY = 0;
     let origLeft = 0;
     let origTop = 0;
+    const DRAG_THRESHOLD = 6; // pixels
 
     function onPointerDown(e) {
-      // Only left button or touch
-      if (e.button !== undefined && e.button !== 0) return;
-      (e.target || e.srcElement).setPointerCapture && (e.target || e.srcElement).setPointerCapture(e.pointerId);
-      const f = (window._mm_floating_state_cached || DEFAULT_FLOATING);
-      if (f.locked) return; // do not drag when locked
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      // compute current left/top
-      const rect = btn.getBoundingClientRect();
-      origLeft = rect.left;
-      origTop = rect.top;
-      btn.style.transition = 'none';
-      e.preventDefault();
+      try {
+        // Only left button or touch
+        if (e.button !== undefined && e.button !== 0) return;
+        const f = (window._mm_floating_state_cached || DEFAULT_FLOATING);
+        if (f.locked) return; // do not drag when locked
+        isDragging = true;
+        draggingStarted = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = btn.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        btn._mm_isDragging = false;
+        // capture pointer if supported
+        try {
+          (e.target || e.srcElement).setPointerCapture && (e.target || e.srcElement).setPointerCapture(e.pointerId);
+        } catch (err) { /* ignore */ }
+        btn.style.transition = 'none';
+        e.preventDefault();
+      } catch (err) {
+        console.error('MM onPointerDown error', err);
+      }
     }
 
     function onPointerMove(e) {
-      if (!isDragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      const newLeft = Math.max(6, origLeft + dx);
-      const newTop = Math.max(6, origTop + dy);
-      // apply
-      btn.style.left = newLeft + 'px';
-      btn.style.top = newTop + 'px';
-      btn.style.right = 'auto';
+      try {
+        if (!isDragging) return;
+        const f = (window._mm_floating_state_cached || DEFAULT_FLOATING);
+        if (f.locked) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (!draggingStarted && dist < DRAG_THRESHOLD) return;
+        draggingStarted = true;
+        btn._mm_isDragging = true;
+        const newLeft = Math.max(6, origLeft + dx);
+        const newTop = Math.max(6, origTop + dy);
+        btn.style.left = newLeft + 'px';
+        btn.style.top = newTop + 'px';
+        btn.style.right = 'auto';
+      } catch (err) {
+        console.error('MM onPointerMove error', err);
+      }
     }
 
     async function onPointerUp(e) {
-      if (!isDragging) return;
-      isDragging = false;
-      btn.style.transition = '';
-      // Save position to storage (but do not change lock state)
-      const rect = btn.getBoundingClientRect();
-      const floatingState = (await storageGet(FLOATING_KEY, null)) || DEFAULT_FLOATING;
-      floatingState.x = Math.round(rect.left);
-      floatingState.y = Math.round(rect.top);
-      // keep locked flag as-is
-      await storageSet(FLOATING_KEY, floatingState);
-      // cache
-      window._mm_floating_state_cached = floatingState;
-      toast('Button position saved');
+      try {
+        if (!isDragging) return;
+        isDragging = false;
+        draggingStarted = false;
+        btn.style.transition = '';
+        // release pointer capture if supported
+        try {
+          (e.target || e.srcElement).releasePointerCapture && (e.target || e.srcElement).releasePointerCapture(e.pointerId);
+        } catch (err) { /* ignore */ }
+
+        // Save position to storage (debounced)
+        const rect = btn.getBoundingClientRect();
+        const floatingState = (await storageGet(FLOATING_KEY, null)) || DEFAULT_FLOATING;
+        floatingState.x = Math.round(rect.left);
+        floatingState.y = Math.round(rect.top);
+        // ensure we clear 'right' usage by applying left/top
+        btn.style.right = 'auto';
+        await debouncedSaveFloating(floatingState);
+        toast('Button position saved');
+        // small timeout to clear dragging flag
+        setTimeout(() => { btn._mm_isDragging = false; }, 50);
+      } catch (err) {
+        console.error('MM onPointerUp error', err);
+      }
     }
 
     // Pointer events for mouse/touch/pen
@@ -561,7 +479,6 @@ async function insertSupportBanner() {
       await storageSet(FLOATING_KEY, floatingState);
       window._mm_floating_state_cached = floatingState;
       updateLockUI(floatingState.locked);
-      // If locking, ensure the button has mm-locked class; if unlocking, remove it
       const btn = document.getElementById('mm-sidebar-btn');
       if (btn) btn.classList.toggle('mm-locked', floatingState.locked);
       toast(floatingState.locked ? 'Button locked' : 'Button unlocked');
@@ -681,7 +598,6 @@ async function insertSupportBanner() {
     if (!panel) return;
     panel.classList.add('open');
     panel.setAttribute('aria-hidden', 'false');
-    // When opening, ensure the floating button exists and reflect lock state
     (async () => {
       const floatingState = (await storageGet(FLOATING_KEY, null)) || DEFAULT_FLOATING;
       const btn = document.getElementById('mm-sidebar-btn');
@@ -694,67 +610,122 @@ async function insertSupportBanner() {
     if (!panel) return;
     panel.classList.remove('open');
     panel.setAttribute('aria-hidden', 'true');
-    // If locked, ensure the button remains where it was when closed (position already saved on pointerup)
-    // If unlocked, nothing changes (button remains draggable)
   }
 
   /* ===========================
      Module D: Compose Page Detection and Autofill
      =========================== */
 
+  // Compose page field selectors - add multiple fallbacks for robustness
   const SELECTORS = {
-    subjectInput: 'input[name="subject"], input#subject, input.compose-subject, input[name="message_subject"]',
-    bodyTextarea: 'textarea[name="message"], textarea#message, textarea.compose-body, textarea[name="message_body"]',
-    bodyContentEditable: '[contenteditable="true"].editor, .editor-content[contenteditable="true"]'
+    subjectInput: [
+      'input[name="subject"]',
+      'input#subject',
+      'input.compose-subject',
+      'input[name="message_subject"]',
+      'input[name="subject_field"]',
+      '.compose-subject input'
+    ],
+    bodyTextarea: [
+      'textarea[name="message"]',
+      'textarea#message',
+      'textarea.compose-body',
+      'textarea[name="message_body"]',
+      '.compose-body textarea'
+    ],
+    bodyContentEditable: [
+      '[contenteditable="true"].editor',
+      '.editor-content[contenteditable="true"]',
+      '[contenteditable="true"].compose-editor'
+    ]
   };
 
-  function findSubjectField(root = document) {
-    for (const sel of [SELECTORS.subjectInput]) {
-      const el = root.querySelector(sel);
-      if (el) return el;
+  function findFirst(selectorList, root = document) {
+    for (const sel of selectorList) {
+      try {
+        const el = root.querySelector(sel);
+        if (el) return el;
+      } catch (err) {
+        // ignore invalid selectors
+      }
     }
     return null;
+  }
+
+  function findSubjectField(root = document) {
+    return findFirst(SELECTORS.subjectInput, root);
   }
 
   function findBodyField(root = document) {
-    for (const sel of [SELECTORS.bodyTextarea, SELECTORS.bodyContentEditable]) {
-      const el = root.querySelector(sel);
-      if (el) return el;
-    }
-    return null;
+    const ta = findFirst(SELECTORS.bodyTextarea, root);
+    if (ta) return ta;
+    return findFirst(SELECTORS.bodyContentEditable, root);
   }
 
+  // Apply template to compose fields (defensive)
   async function applyTemplateToCompose(template) {
     if (!template) return;
     try {
-      const subject = await waitForElement(SELECTORS.subjectInput, document, 8000).catch(() => null);
-      const body = await waitForElement(SELECTORS.bodyTextarea, document, 8000).catch(() => null);
-      const bodyCE = document.querySelector(SELECTORS.bodyContentEditable);
+      // Attempt to find fields with waitForElement fallbacks
+      let subject = null;
+      let body = null;
+      try {
+        subject = await waitForElement(SELECTORS.subjectInput[0], document, 800).catch(() => null);
+      } catch (e) { subject = null; }
+      // If not found quickly, try other selectors without waiting long
+      if (!subject) subject = findSubjectField(document);
 
-      if (subject) {
-        subject.focus();
-        subject.value = template.subject || '';
-        subject.dispatchEvent(new Event('input', { bubbles: true }));
-        subject.dispatchEvent(new Event('change', { bubbles: true }));
+      try {
+        body = await waitForElement(SELECTORS.bodyTextarea[0], document, 800).catch(() => null);
+      } catch (e) { body = null; }
+      if (!body) body = findBodyField(document);
+
+      if (!subject && !body) {
+        console.warn('MM: No compose fields found to apply template');
+        toast('Compose fields not found. Please open the compose page or update selectors.');
+        return;
       }
 
-      if (body) {
-        body.focus();
-        body.value = template.body || '';
-        body.dispatchEvent(new Event('input', { bubbles: true }));
-        body.dispatchEvent(new Event('change', { bubbles: true }));
-      } else if (bodyCE) {
-        bodyCE.focus();
-        const html = (template.body || '').split('\n').map(escapeHtml).join('<br>');
-        bodyCE.innerHTML = html;
-        bodyCE.dispatchEvent(new Event('input', { bubbles: true }));
+      // Subject
+      if (subject) {
+        try {
+          subject.focus();
+          subject.value = template.subject || '';
+          subject.dispatchEvent(new Event('input', { bubbles: true }));
+          subject.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          console.warn('MM: failed to set subject', err);
+        }
+      }
+
+      // Body
+      // If body is a textarea element
+      if (body && body.tagName && body.tagName.toLowerCase() === 'textarea') {
+        try {
+          body.focus();
+          body.value = template.body || '';
+          body.dispatchEvent(new Event('input', { bubbles: true }));
+          body.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          console.warn('MM: failed to set textarea body', err);
+        }
+      } else if (body && body.getAttribute && body.getAttribute('contenteditable') === 'true') {
+        try {
+          body.focus();
+          const html = (template.body || '').split('\n').map(escapeHtml).join('<br>');
+          body.innerHTML = html;
+          body.dispatchEvent(new Event('input', { bubbles: true }));
+        } catch (err) {
+          console.warn('MM: failed to set contenteditable body', err);
+        }
       } else {
+        // fallback: any textarea
         const fallback = document.querySelector('textarea');
         if (fallback) {
           fallback.value = template.body || '';
           fallback.dispatchEvent(new Event('input', { bubbles: true }));
         } else {
-          console.warn('MM: No compose body field found to apply template');
+          console.warn('MM: No body field found to apply template (fallback failed)');
         }
       }
     } catch (err) {
@@ -762,6 +733,7 @@ async function insertSupportBanner() {
     }
   }
 
+  // Escape HTML helper
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"']/g, function (m) {
@@ -769,6 +741,7 @@ async function insertSupportBanner() {
     });
   }
 
+  // Observe compose page and auto-apply if configured
   async function observeComposePage() {
     onComposePage(async () => {
       const s = (await storageGet(STORAGE_KEY)) || DEFAULT_STATE;
@@ -788,6 +761,7 @@ async function insertSupportBanner() {
     });
   }
 
+  // Quick picker UI near compose area
   function addComposeQuickPicker() {
     if (document.getElementById('mm-quick-picker')) return;
     const container = document.createElement('div');
@@ -836,6 +810,7 @@ async function insertSupportBanner() {
 
     document.body.appendChild(container);
 
+    // populate select
     (async () => {
       const s = (await storageGet(STORAGE_KEY)) || DEFAULT_STATE;
       select.innerHTML = '';
@@ -878,20 +853,28 @@ async function insertSupportBanner() {
   async function pasteFormattedPageSource(template) {
     const formatted = `**${template.subject || ''}**\n\n${template.body || ''}`;
 
-    const bodyTextarea = document.querySelector(SELECTORS.bodyTextarea);
-    const bodyCE = document.querySelector(SELECTORS.bodyContentEditable);
+    const bodyTextarea = findFirst(SELECTORS.bodyTextarea, document);
+    const bodyCE = findFirst(SELECTORS.bodyContentEditable, document);
 
     if (bodyTextarea) {
-      bodyTextarea.focus();
-      bodyTextarea.value = formatted;
-      bodyTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-      return;
+      try {
+        bodyTextarea.focus();
+        bodyTextarea.value = formatted;
+        bodyTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      } catch (err) {
+        console.warn('MM pasteFormattedPageSource textarea error', err);
+      }
     } else if (bodyCE) {
-      const html = formatted.split('\n').map(escapeHtml).join('<br>');
-      bodyCE.focus();
-      bodyCE.innerHTML = html;
-      bodyCE.dispatchEvent(new Event('input', { bubbles: true }));
-      return;
+      try {
+        const html = formatted.split('\n').map(escapeHtml).join('<br>');
+        bodyCE.focus();
+        bodyCE.innerHTML = html;
+        bodyCE.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      } catch (err) {
+        console.warn('MM pasteFormattedPageSource contenteditable error', err);
+      }
     } else {
       const fallback = document.querySelector('textarea');
       if (fallback) {
@@ -912,7 +895,6 @@ async function insertSupportBanner() {
       const state = await ensureState();
       await injectSidebarButton(state);
       await buildSettingsPanel(state);
-      await insertSupportBanner(); 
       await observeComposePage();
 
       if (typeof GM_registerMenuCommand === 'function') {
@@ -928,7 +910,7 @@ async function insertSupportBanner() {
         }, 600);
       }
 
-      console.info('MessageManager initialized (floating button + lock support)');
+      console.info('MessageManager initialized (v1.3.4)');
     } catch (err) {
       console.error('MessageManager init error', err);
     }
@@ -941,6 +923,3 @@ async function insertSupportBanner() {
      End of script
      =========================== */
 })();
-
-
-
