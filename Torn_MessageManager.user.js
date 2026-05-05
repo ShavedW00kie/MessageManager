@@ -498,6 +498,168 @@
         await Storage.save(s);
       });
     }
+     
+/* ===========================
+   Module: Template Delete Buttons (modular insert)
+   Purpose: Add a small "Delete" button next to each template in the settings list.
+   How to use: Insert this block **after** TemplatesManager is defined (in your modular script).
+   Then call: TemplateDeleteButtons.install(); 
+   The module will monkey-patch TemplatesManager.refreshUI so delete buttons are added automatically
+   whenever the templates list is refreshed.
+   =========================== */
+
+const TemplateDeleteButtons = (function (Storage, UI, TemplatesManager) {
+  // Small scoped CSS for the delete button
+  function injectStyles() {
+    if (document.getElementById('mm-delete-btn-style')) return;
+    const s = document.createElement('style');
+    s.id = 'mm-delete-btn-style';
+    s.textContent = `
+      .mm-delete-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.06);
+        color: #f88;
+        padding: 4px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-left: 6px;
+      }
+      .mm-delete-btn:hover { background: rgba(255,0,0,0.06); color: #ffb3b3; }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // Append a delete button into a template row element (id = template.id)
+  function appendDeleteButtonToRow(rowEl, templateId) {
+    if (!rowEl || !templateId) return;
+    // avoid adding twice
+    if (rowEl.querySelector(`.mm-delete-btn[data-id="${templateId}"]`)) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'mm-delete-btn';
+    btn.type = 'button';
+    btn.textContent = 'Delete';
+    btn.dataset.id = templateId;
+
+    // place the delete button into the row's right-side container if present, otherwise append
+    const rightContainer = rowEl.querySelector('div:last-child');
+    if (rightContainer) rightContainer.appendChild(btn);
+    else rowEl.appendChild(btn);
+  }
+
+  // Walk the templates list and add delete buttons for each template row
+  async function enhanceRows() {
+    const list = document.getElementById('mm-templates-list');
+    if (!list) return;
+    // Each row was created by TemplatesManager.refreshUI as a direct child
+    const rows = Array.from(list.children);
+    if (!rows.length) return;
+
+    // For each row, try to extract the template id from the existing select button or data attribute
+    rows.forEach((row) => {
+      // Prefer an existing select button with data-id
+      const selectBtn = row.querySelector('.mm-select-btn[data-id]');
+      const dataId = selectBtn ? selectBtn.getAttribute('data-id') : null;
+
+      // If no select button, try to find any element with data-id
+      const anyWithId = row.querySelector('[data-id]');
+      const id = dataId || (anyWithId ? anyWithId.getAttribute('data-id') : null);
+
+      // If still no id, try to parse from innerHTML (last resort)
+      let templateId = id;
+      if (!templateId) {
+        const match = row.innerHTML.match(/data-id="([^"]+)"/);
+        if (match) templateId = match[1];
+      }
+
+      if (templateId) appendDeleteButtonToRow(row, templateId);
+    });
+  }
+
+  // Event delegation: handle clicks on delete buttons
+  function attachDelegatedHandler() {
+    const list = document.getElementById('mm-templates-list');
+    if (!list) return;
+    // Avoid attaching twice
+    if (list._mm_delete_handler_attached) return;
+    list._mm_delete_handler_attached = true;
+
+    list.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.mm-delete-btn');
+      if (!btn) return;
+      ev.preventDefault();
+      const id = btn.dataset.id;
+      if (!id) return;
+
+      // Confirm deletion (simple confirm; replace with custom modal if desired)
+      const ok = confirm('Delete this template? This action cannot be undone.');
+      if (!ok) return;
+
+      try {
+        const s = await Storage.load();
+        const beforeCount = s.templates.length;
+        s.templates = s.templates.filter((t) => t.id !== id);
+        if (s.selectedTemplateId === id) s.selectedTemplateId = s.templates.length ? s.templates[0].id : null;
+        await Storage.save(s);
+
+        // Refresh templates UI (TemplatesManager.refreshUI should exist)
+        if (typeof TemplatesManager.refreshUI === 'function') {
+          await TemplatesManager.refreshUI();
+        } else {
+          // fallback: rebuild rows manually
+          await enhanceRows();
+        }
+
+        UI.showToast('Template deleted');
+      } catch (err) {
+        console.error('TemplateDeleteButtons: delete error', err);
+        UI.showToast('Failed to delete template');
+      }
+    });
+  }
+
+  // Monkey-patch TemplatesManager.refreshUI to append delete buttons after it runs
+  function patchRefreshUI() {
+    if (!TemplatesManager || typeof TemplatesManager.refreshUI !== 'function') return;
+    if (TemplatesManager._mm_refresh_patched) return;
+    TemplatesManager._mm_refresh_patched = true;
+
+    const original = TemplatesManager.refreshUI.bind(TemplatesManager);
+    TemplatesManager.refreshUI = async function patchedRefreshUI(...args) {
+      const res = await original(...args);
+      // small delay to ensure DOM is updated
+      setTimeout(() => {
+        enhanceRows();
+      }, 8);
+      return res;
+    };
+  }
+
+  // Public install function
+  function install() {
+    injectStyles();
+    patchRefreshUI();
+    // attach handler to list (if list exists now or later)
+    // try immediate attach; if list not present, wait briefly and try again
+    const tryAttach = () => {
+      const list = document.getElementById('mm-templates-list');
+      if (list) {
+        attachDelegatedHandler();
+        enhanceRows();
+      } else {
+        // try again after a short delay (settings panel may not be built yet)
+        setTimeout(tryAttach, 150);
+      }
+    };
+    tryAttach();
+  }
+
+  return { install, enhanceRows };
+})(Storage, UI, TemplatesManager);
+
+// Install the delete-button module (call once)
+TemplateDeleteButtons.install();
 
     async function refreshUI() {
       const s = await Storage.load();
