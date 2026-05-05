@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         MessageManager for Torn (Floating Settings Button + Lock)
+// @name         MessageManager for Torn (Modular v1.3.5)
 // @namespace    https://www.torn.com/
 // @version      1.3.5
-// @description  MessageManager - Tampermonkey userscript to manage message templates and auto-fill Torn compose page.
+// @description  Modular rewrite of MessageManager: floating settings button, templates, compose autofill, lockable draggable button.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
@@ -17,9 +17,10 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-/* MessageManager Modular Rewrite
-   - Modules: Core, Storage, Utils, UI, FloatingButton, TemplatesManager, ComposeIntegration, Diagnostics
-   - All code inside IIFE; minimal global exposure.
+/* MessageManager Modular v1.3.5
+   - Consolidated debounced floating-position saver (fix duplicate identifier)
+   - Retains previous modular architecture and critical fixes
+   - Uses GreasyFork update/download URLs (replace XXXXX with your GreasyFork script ID)
 */
 
 (function () {
@@ -81,7 +82,6 @@
 
   /* ===========================
      Module: Storage
-     - GM wrappers with fallback and schema versioning
      =========================== */
   const Storage = (function () {
     const DEFAULTS = {
@@ -132,10 +132,7 @@
         await setRaw(KEY, DEFAULTS);
         return JSON.parse(JSON.stringify(DEFAULTS));
       }
-      // migration hook (if schemaVersion changes in future)
-      if (!s.schemaVersion) {
-        s.schemaVersion = 1;
-      }
+      if (!s.schemaVersion) s.schemaVersion = 1;
       return s;
     }
 
@@ -143,7 +140,6 @@
       await setRaw(KEY, state);
     }
 
-    // Floating button position stored separately
     const FLOAT_KEY = 'MM_floating_v1';
     async function loadFloating() {
       const f = (await getRaw(FLOAT_KEY, null)) || { locked: false, x: null, y: null };
@@ -153,7 +149,6 @@
       await setRaw(FLOAT_KEY, floating);
     }
 
-    // Support banner dismissal
     const BANNER_KEY = 'MM_support_banner_v1';
     async function bannerDismissed() {
       const b = (await getRaw(BANNER_KEY, null)) || { dismissed: false };
@@ -168,7 +163,6 @@
 
   /* ===========================
      Module: UI
-     - Creates DOM, styles, toast, support banner
      =========================== */
   const UI = (function () {
     const IDS = {
@@ -325,16 +319,14 @@
 
   /* ===========================
      Module: FloatingButton
-     - Drag, lock, keyboard, persistence
      =========================== */
   const FloatingButton = (function (UI, Storage, Utils) {
     let btnEl = null;
-    let floatingState = null;
 
     async function init(state) {
       UI.injectStyles();
       btnEl = UI.createButton();
-      floatingState = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
+      const floatingState = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
       if (floatingState.locked) btnEl.classList.add('mm-locked');
       if (floatingState.x !== null && floatingState.y !== null) {
         btnEl.style.right = 'auto';
@@ -346,7 +338,6 @@
 
     function attachEvents() {
       if (!btnEl) return;
-      // click toggles enabled (but only if not dragging)
       btnEl.addEventListener('click', async (e) => {
         if (btnEl._mm_isDragging) return;
         const s = await Storage.load();
@@ -358,12 +349,10 @@
 
       btnEl.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        // open settings panel
         const panel = document.getElementById('mm-settings-panel');
         if (panel) panel.classList.add('open');
       });
 
-      // keyboard nudge
       btnEl.addEventListener('keydown', async (ev) => {
         try {
           const f = (await Storage.loadFloating()) || { locked: false };
@@ -389,7 +378,6 @@
         }
       });
 
-      // pointer drag
       let isDragging = false;
       let draggingStarted = false;
       let startX = 0;
@@ -440,6 +428,7 @@
         }
       }
 
+      // Single debounced floating-position saver (consolidated)
       const saveFloatingDebounced = Utils.debounce(async () => {
         try {
           const rect = btnEl.getBoundingClientRect();
@@ -460,7 +449,6 @@
           draggingStarted = false;
           btnEl.style.transition = '';
           try { (e.target || e.srcElement).releasePointerCapture && (e.target || e.srcElement).releasePointerCapture(e.pointerId); } catch (err) {}
-          // save position
           await saveFloatingDebounced();
           UI.showToast('Button position saved');
           setTimeout(() => { btnEl._mm_isDragging = false; }, 50);
@@ -468,23 +456,6 @@
           console.error('FloatingButton onPointerUp', err);
         }
       }
-
-      // helper to call debounced save
-      async function saveFloatingDebounced() {
-        await saveFloatingDebouncedInner();
-      }
-      const saveFloatingDebouncedInner = Utils.debounce(async function () {
-        try {
-          const rect = btnEl.getBoundingClientRect();
-          const f = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
-          f.x = Math.round(rect.left);
-          f.y = Math.round(rect.top);
-          await Storage.saveFloating(f);
-          window._mm_floating_state_cached = f;
-        } catch (err) {
-          console.error('FloatingButton saveFloatingDebouncedInner', err);
-        }
-      }, 180);
 
       btnEl.addEventListener('pointerdown', onPointerDown);
       window.addEventListener('pointermove', onPointerMove);
@@ -497,12 +468,10 @@
 
   /* ===========================
      Module: TemplatesManager
-     - CRUD and selection
      =========================== */
   const TemplatesManager = (function (Storage, Utils, UI) {
     async function init() {
       await refreshUI();
-      // wire UI buttons
       const panel = document.getElementById('mm-settings-panel');
       if (!panel) return;
       panel.querySelector('#mm-save-template').addEventListener('click', saveTemplate);
@@ -517,7 +486,6 @@
         document.getElementById('mm-sidebar-btn')?.classList.toggle('mm-locked', f.locked);
         UI.showToast(f.locked ? 'Button locked' : 'Button unlocked');
       });
-      // enable checkbox
       panel.querySelector('#mm-enabled-checkbox').addEventListener('change', async (e) => {
         const s = await Storage.load();
         s.enabled = e.target.checked;
@@ -562,7 +530,6 @@
         });
       });
 
-      // set checkboxes and fields
       const panel = document.getElementById('mm-settings-panel');
       if (!panel) return;
       panel.querySelector('#mm-enabled-checkbox').checked = !!s.enabled;
@@ -575,7 +542,6 @@
           panel.querySelector('#mm-template-body').value = tpl.body;
         }
       }
-      // populate quick picker
       const quick = document.getElementById('mm-quick-select');
       if (quick) {
         quick.innerHTML = '';
@@ -627,10 +593,8 @@
 
   /* ===========================
      Module: ComposeIntegration
-     - Detect compose page, apply templates, paste formatted
      =========================== */
   const ComposeIntegration = (function (Storage, Utils, UI) {
-    // selectors with fallbacks
     const SELECTORS = {
       subjectInput: [
         'input[name="subject"]',
@@ -659,7 +623,7 @@
         try {
           const el = root.querySelector(sel);
           if (el) return el;
-        } catch (err) { /* ignore invalid selector */ }
+        } catch (err) {}
       }
       return null;
     }
@@ -677,10 +641,8 @@
     async function applyTemplate(template) {
       if (!template) return;
       try {
-        // try quick finds first
         let subject = findFirst(SELECTORS.subjectInput);
         let body = findFirst(SELECTORS.bodyTextarea) || findFirst(SELECTORS.bodyContentEditable);
-        // if not found, wait briefly for SPA render
         if (!subject) {
           try { subject = await Utils.waitForElement(SELECTORS.subjectInput[0], document, 800).catch(() => null); } catch (e) { subject = null; }
           if (!subject) subject = findFirst(SELECTORS.subjectInput);
@@ -735,7 +697,6 @@
 
     async function pasteFormatted(template) {
       const formatted = `**${template.subject || ''}**\n\n${template.body || ''}`;
-      // reuse apply logic but insert formatted text
       try {
         const bodyTA = findFirst(SELECTORS.bodyTextarea);
         const bodyCE = findFirst(SELECTORS.bodyContentEditable);
@@ -767,16 +728,13 @@
     async function init() {
       onComposePage(async () => {
         const s = await Storage.load();
-        // ensure UI and templates are ready
         UI.createPanel();
         UI.createQuickPicker();
         await TemplatesManager.refreshUI?.();
-        // auto apply if configured
         if (s.enabled && s.autoApplyOnOpen && s.selectedTemplateId) {
           const tpl = s.templates.find(t => t.id === s.selectedTemplateId);
           if (tpl) setTimeout(() => applyTemplate(tpl), 600);
         }
-        // wire quick picker buttons
         const quick = document.getElementById('mm-quick-picker');
         if (quick) {
           quick.querySelector('#mm-quick-apply').onclick = async () => {
@@ -808,7 +766,6 @@
 
   /* ===========================
      Module: Diagnostics
-     - small helpers for debugging
      =========================== */
   const Diagnostics = (function (Storage) {
     async function dumpState() {
@@ -817,7 +774,6 @@
       console.info('MM Diagnostics - state:', s, 'floating:', f);
       return { state: s, floating: f };
     }
-    // expose a console command
     window.MM_Diagnostics = { dumpState };
     return { dumpState };
   })(Storage);
@@ -830,22 +786,19 @@
       try {
         UI.injectStyles();
         const state = await Storage.load();
-        // create UI elements
         UI.createPanel();
         UI.createQuickPicker();
         await UI.insertSupportBanner(document.getElementById('mm-settings-panel'));
-        // init modules
         await FloatingButton.init(state);
         await TemplatesManager.init();
         await ComposeIntegration.init();
-        // register menu command
         if (typeof GM_registerMenuCommand === 'function') {
           GM_registerMenuCommand('Open MessageManager Settings', () => {
             const panel = document.getElementById('mm-settings-panel');
             if (panel) panel.classList.add('open');
           });
         }
-        console.info('MessageManager modular init complete');
+        console.info('MessageManager modular init complete (v1.3.5)');
       } catch (err) {
         console.error('Core.init error', err);
       }
@@ -853,10 +806,5 @@
     return { init };
   })(UI, Storage, FloatingButton, TemplatesManager, ComposeIntegration);
 
-  // Start
   Core.init();
-
-  /* ===========================
-     End of modular script
-     =========================== */
 })();
