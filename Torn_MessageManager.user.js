@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MessageManager for Torn (Modular v1.3.5)
 // @namespace    https://www.torn.com/
-// @version      1.3.5
+// @version      1.3.6
 // @description  Modular rewrite of MessageManager: floating settings button, templates, compose autofill, lockable draggable button.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
