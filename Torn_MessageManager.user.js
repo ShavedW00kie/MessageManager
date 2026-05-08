@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MessageManager for Torn (Modular v1.3.5)
 // @namespace    https://www.torn.com/
-// @version      1.3.6
-// @description  Modular rewrite of MessageManager: floating settings button, templates, compose autofill, lockable draggable button.
+// @version      1.3.7
+// @description  Message Manager for storing and automatically pasting in pre-generated messages into mails within torn.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
@@ -16,6 +16,8 @@
 // @grant        GM_registerMenuCommand
 // @run-at       document-idle
 // ==/UserScript==
+
+//  Recent change: Modular rewrite of MessageManager: floating settings button, templates, compose autofill, lockable draggable button.
 
 /* MessageManager Modular v1.3.5
    - Consolidated debounced floating-position saver (fix duplicate identifier)
