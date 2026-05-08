@@ -963,6 +963,7 @@ TemplateDeleteButtons.install();
         console.info('MessageManager modular init complete (v1.3.5)');
       } catch (err) {
         console.error('Core.init error', err);
+        TemplateDeleteButtons.install();
       }
     }
     return { init };
