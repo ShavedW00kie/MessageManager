@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MessageManager for Torn (Modular v1.3.8)
 // @namespace    https://www.torn.com/
-// @version      1.3.10
-// @icon https://github.com/ShavedW00kie/MessageManager/blob/85c7ea7a367a4918d89cd6278d24c6796094c27e/icons/Envelope.jpg
+// @version      1.3.11
+// @icon data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAmQAAAJkCAIAAAAwc6rrAAEAAElEQVR4nOz96bNtS1IfCHpErGFP55w7vfvey4lZDAmIoUFCSAwlEBJCKlGoJNTV3dZt1mZlbf2t2/pfKOv+1GZt1h/K2tTqogpVqYSQUDHPkCRTkiRJghiSBHJ80x3P2cMaI/qDv/g932uv8LVv8jLJ
 // @description  Message Manager for storing and automatically pasting in pre-generated messages into mails within Torn. Modular, robust, and compatible with Tampermonkey/Violentmonkey (desktop & mobile) and TornPDA.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
