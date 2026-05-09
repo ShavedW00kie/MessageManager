@@ -1,4 +1,4 @@
-# MessageManager — Tampermonkey userscript
+# MessageManager — ViolentMonkey / Tampermonkey userscript
 
 **A lightweight, local-first userscript that speeds up composing messages on Torn.com.**  
 Injects a floating **M/M** control, manages reusable message templates, and quickly inserts or formats them into the compose form — while keeping full manual control (no auto-send).
@@ -23,8 +23,8 @@ Composing the same recruitment or outreach messages repeatedly is tedious. **Mes
 ---
 
 ## Install
-1. Install **Tampermonkey** (or a compatible userscript manager).  
-2. Create a new userscript and paste the MessageManager script.  
+1. Install **Violentmonkey or Tampermonkey** (or other compatible userscript manager).  
+2. Create a new userscript and paste the MessageManager script.  (or import via Greasyfork)
 3. Save and enable the script.  
 4. Open Torn’s compose page:  
    `https://www.torn.com/messages.php#/p=compose`
