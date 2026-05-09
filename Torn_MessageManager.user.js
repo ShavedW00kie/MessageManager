@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         MessageManager for Torn (Modular v1.3.8)
+// @name         MessageManager for Torn
 // @namespace    https://www.torn.com/
-// @version      1.3.12
+// @version      1.3.13
 // @description  Message Manager for storing and automatically pasting in pre-generated messages into mails within Torn. Modular, robust, and compatible with Tampermonkey/Violentmonkey (desktop & mobile) and TornPDA.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
@@ -17,15 +17,6 @@
 // @run-at       document-idle
 // @icon data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAABFUlEQVR4nO3XMQrCQBBF0Y8YkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgYkYgY
 // ==/UserScript==
-
-/*
- MessageManager Modular v1.3.8
- - Deterministic per-row Delete button integrated into TemplatesManager.refreshUI
- - Removed fragile early-install delete-module and duplicate declarations
- - Consolidated debounced floating-position saver
- - Robust storage wrappers, UI, compose integration, and diagnostics
- - Compatible with Tampermonkey/Violentmonkey (desktop & mobile) and TornPDA
-*/
 
 (function () {
   'use strict';
@@ -179,7 +170,7 @@
     function injectStyles() {
       if (document.getElementById('mm-styles')) return;
       const css = `
-#${IDS.btn} { display:inline-flex; align-items:center; justify-content:center; width:36px; height:28px; border-radius:4px; cursor:pointer; font-weight:700; color:#b7f5b7; background:linear-gradient(#0b3,#060); box-shadow:0 0 12px rgba(0,255,100,0.45); border:1px solid rgba(0,120,0,0.6); transition:transform .12s ease; z-index:9999; position:fixed; right:18px; top:80px; user-select:none; touch-action:none; pointer-events:auto; }
+#${IDS.btn} { display:inline-flex; align-items:center; justify-content:center; width:36px; height:28px; border-radius:4px; cursor:pointer; font-weight:700; color:#b7f5b7; background:linear-gradient(#0b3,#060); box-shadow:0 0 12px rgba(0,255,100,0.45); border:1px solid rgba(0,120,0,0.6); transition:transform .12s ease; z-index:9999; position:fixed; right:18px; top:80px; user-select:none; touch-action:none; pointer-events:auto; font-family: sans-serif; line-height:1; }
 #${IDS.btn}.mm-disabled { background:linear-gradient(#444,#222); color:#999; box-shadow:none; border:1px solid rgba(0,0,0,0.4); opacity:0.8; }
 #${IDS.btn}.mm-locked { box-shadow:0 0 6px rgba(0,255,100,0.25) inset; cursor:default; }
 #${IDS.panel} { position:fixed; right:18px; top:120px; width:420px; max-width:calc(100% - 40px); background:#111; color:#ddd; border:1px solid #333; border-radius:8px; padding:12px; box-shadow:0 6px 30px rgba(0,0,0,0.6); z-index:99999; font-size:13px; display:none; }
@@ -208,6 +199,11 @@
       btn.setAttribute('aria-pressed', 'true');
       btn.textContent = 'M/M';
       btn.tabIndex = 0;
+      // ensure visible and accessible
+      btn.style.display = 'inline-flex';
+      btn.style.alignItems = 'center';
+      btn.style.justifyContent = 'center';
+      btn.style.fontFamily = 'sans-serif';
       document.body.appendChild(btn);
       return btn;
     }
@@ -339,9 +335,15 @@
         btnEl.style.left = floatingState.x + 'px';
         btnEl.style.top = floatingState.y + 'px';
       }
+      // ensure visible text/icon fallback
+      if (!btnEl.textContent || btnEl.textContent.trim() === '') btnEl.textContent = 'M/M';
+      btnEl.style.display = 'inline-flex';
       attachEvents();
       // cache floating state
       window._mm_floating_state_cached = floatingState;
+      // expose for other modules (safe reference)
+      window.FloatingButton = window.FloatingButton || {};
+      window.FloatingButton._ref = { setLocked, toggleLocked, init };
     }
 
     function attachEvents() {
@@ -395,10 +397,10 @@
       let origTop = 0;
       const DRAG_THRESHOLD = 6;
 
-      function onPointerDown(e) {
+      async function onPointerDown(e) {
         try {
           if (e.button !== undefined && e.button !== 0) return;
-          const f = (window._mm_floating_state_cached || { locked: false });
+          const f = window._mm_floating_state_cached || { locked: false };
           if (f.locked) return;
           isDragging = true;
           draggingStarted = false;
@@ -419,7 +421,7 @@
       function onPointerMove(e) {
         try {
           if (!isDragging) return;
-          const f = (window._mm_floating_state_cached || { locked: false });
+          const f = window._mm_floating_state_cached || { locked: false };
           if (f.locked) return;
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
@@ -472,7 +474,36 @@
       window.addEventListener('pointercancel', onPointerUp);
     }
 
-    return { init };
+    // expose lock API so other modules can toggle lock reliably
+    async function setLocked(value) {
+      try {
+        const f = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
+        f.locked = !!value;
+        await Storage.saveFloating(f);
+        window._mm_floating_state_cached = f;
+        if (btnEl) btnEl.classList.toggle('mm-locked', f.locked);
+      } catch (err) {
+        console.error('FloatingButton.setLocked error', err);
+      }
+    }
+
+    async function toggleLocked() {
+      try {
+        const f = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
+        await setLocked(!f.locked);
+        return window._mm_floating_state_cached;
+      } catch (err) {
+        console.error('FloatingButton.toggleLocked error', err);
+      }
+    }
+
+    // expose to window for TemplatesManager to call safely
+    window.FloatingButton = window.FloatingButton || {};
+    window.FloatingButton.setLocked = setLocked;
+    window.FloatingButton.toggleLocked = toggleLocked;
+    window.FloatingButton.init = init;
+
+    return { init, setLocked, toggleLocked };
   })(UI, Storage, Utils);
 
   /* ===========================
@@ -488,12 +519,23 @@
       panel.querySelector('#mm-insert-template').addEventListener('click', insertSelectedIntoCompose);
       panel.querySelector('#mm-close-btn').addEventListener('click', () => panel.classList.remove('open'));
       panel.querySelector('#mm-lock-btn').addEventListener('click', async () => {
-        const f = (await Storage.loadFloating()) || { locked: false };
-        f.locked = !f.locked;
-        await Storage.saveFloating(f);
-        window._mm_floating_state_cached = f;
-        document.getElementById('mm-sidebar-btn')?.classList.toggle('mm-locked', f.locked);
-        UI.showToast(f.locked ? 'Button locked' : 'Button unlocked');
+        try {
+          // Use FloatingButton API to toggle lock so storage, cache and UI stay in sync
+          if (window.FloatingButton && typeof window.FloatingButton.toggleLocked === 'function') {
+            const newState = await window.FloatingButton.toggleLocked();
+            UI.showToast(newState && newState.locked ? 'Button locked' : 'Button unlocked');
+          } else {
+            // Fallback: toggle via storage (keeps previous behavior)
+            const f = (await Storage.loadFloating()) || { locked: false, x: null, y: null };
+            f.locked = !f.locked;
+            await Storage.saveFloating(f);
+            window._mm_floating_state_cached = f;
+            document.getElementById('mm-sidebar-btn')?.classList.toggle('mm-locked', f.locked);
+            UI.showToast(f.locked ? 'Button locked' : 'Button unlocked');
+          }
+        } catch (err) {
+          console.error('TemplatesManager lock handler error', err);
+        }
       });
       panel.querySelector('#mm-enabled-checkbox').addEventListener('change', async (e) => {
         const s = await Storage.load();
@@ -850,6 +892,11 @@
         UI.createQuickPicker();
         await UI.insertSupportBanner(document.getElementById('mm-settings-panel'));
         await FloatingButton.init(state);
+
+        // ensure enabled/disabled visual state is applied to the button
+        const btn = document.getElementById('mm-sidebar-btn');
+        if (btn) btn.classList.toggle('mm-disabled', !state.enabled);
+
         await TemplatesManager.init();
         await ComposeIntegration.init();
 
@@ -867,7 +914,7 @@
           }, 600);
         }
 
-        console.info('MessageManager modular init complete (v1.3.8)');
+        console.info('MessageManager modular init complete (v1.3.9)');
       } catch (err) {
         console.error('Core.init error', err);
       }
@@ -878,7 +925,4 @@
   // Start
   Core.init();
 
-  /* ===========================
-     End of script
-     =========================== */
 })();
