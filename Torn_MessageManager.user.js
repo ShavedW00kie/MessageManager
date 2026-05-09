@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         MessageManager for Torn (Modular v1.3.5)
+// @name         MessageManager for Torn (Modular v1.3.8)
 // @namespace    https://www.torn.com/
-// @version      1.3.7
-// @description  Message Manager for storing and automatically pasting in pre-generated messages into mails within torn.
+// @version      1.3.8
+// @description  Message Manager for storing and automatically pasting in pre-generated messages into mails within Torn. Modular, robust, and compatible with Tampermonkey/Violentmonkey (desktop & mobile) and TornPDA.
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
@@ -17,12 +17,13 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-//  Recent change: Modular rewrite of MessageManager: floating settings button, templates, compose autofill, lockable draggable button.
-
-/* MessageManager Modular v1.3.5
-   - Consolidated debounced floating-position saver (fix duplicate identifier)
-   - Retains previous modular architecture and critical fixes
-   - Uses GreasyFork update/download URLs (replace XXXXX with your GreasyFork script ID)
+/*
+ MessageManager Modular v1.3.8
+ - Deterministic per-row Delete button integrated into TemplatesManager.refreshUI
+ - Removed fragile early-install delete-module and duplicate declarations
+ - Consolidated debounced floating-position saver
+ - Robust storage wrappers, UI, compose integration, and diagnostics
+ - Compatible with Tampermonkey/Violentmonkey (desktop & mobile) and TornPDA
 */
 
 (function () {
@@ -188,6 +189,8 @@
 #${IDS.quick} { position:fixed; top:110px; right:18px; z-index:99998; background:#0b0b0b; border:1px solid #222; padding:6px; border-radius:6px; display:flex; gap:6px; flex-direction:column; max-width:320px; font-size:13px; }
 #${IDS.toast} { position:fixed; right:20px; bottom:20px; background:#0b0; color:#012; padding:8px 12px; border-radius:6px; display:none; z-index:999999; }
 .mm-support-banner { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; background:linear-gradient(180deg,#0f2b0f,#071207); border:1px solid rgba(0,120,0,0.18); color:#dfffe0; padding:8px 10px; border-radius:6px; margin-bottom:10px; font-size:13px; }
+.mm-delete-btn { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: #f88; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 6px; }
+.mm-delete-btn:hover { background: rgba(255,0,0,0.06); color: #ffb3b3; }
 `;
       const s = document.createElement('style');
       s.id = 'mm-styles';
@@ -336,6 +339,8 @@
         btnEl.style.top = floatingState.y + 'px';
       }
       attachEvents();
+      // cache floating state
+      window._mm_floating_state_cached = floatingState;
     }
 
     function attachEvents() {
@@ -372,6 +377,7 @@
             btnEl.style.top = newTop + 'px';
             btnEl.style.right = 'auto';
             await Storage.saveFloating({ ...f, x: Math.round(newLeft), y: Math.round(newTop) });
+            window._mm_floating_state_cached = { ...f, x: Math.round(newLeft), y: Math.round(newTop) };
             UI.showToast('Button position saved');
             ev.preventDefault();
           }
@@ -391,7 +397,7 @@
       function onPointerDown(e) {
         try {
           if (e.button !== undefined && e.button !== 0) return;
-          const f = window._mm_floating_state_cached || { locked: false };
+          const f = (window._mm_floating_state_cached || { locked: false });
           if (f.locked) return;
           isDragging = true;
           draggingStarted = false;
@@ -412,7 +418,7 @@
       function onPointerMove(e) {
         try {
           if (!isDragging) return;
-          const f = window._mm_floating_state_cached || { locked: false };
+          const f = (window._mm_floating_state_cached || { locked: false });
           if (f.locked) return;
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
@@ -500,222 +506,111 @@
         await Storage.save(s);
       });
     }
-     
-/* ===========================
-   Module: Template Delete Buttons (modular insert)
-   Purpose: Add a small "Delete" button next to each template in the settings list.
-   How to use: Insert this block **after** TemplatesManager is defined (in your modular script).
-   Then call: TemplateDeleteButtons.install(); 
-   The module will monkey-patch TemplatesManager.refreshUI so delete buttons are added automatically
-   whenever the templates list is refreshed.
-   =========================== */
-
-const TemplateDeleteButtons = (function (Storage, UI, TemplatesManager) {
-  // Small scoped CSS for the delete button
-  function injectStyles() {
-    if (document.getElementById('mm-delete-btn-style')) return;
-    const s = document.createElement('style');
-    s.id = 'mm-delete-btn-style';
-    s.textContent = `
-      .mm-delete-btn {
-        background: transparent;
-        border: 1px solid rgba(255,255,255,0.06);
-        color: #f88;
-        padding: 4px 6px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        margin-left: 6px;
-      }
-      .mm-delete-btn:hover { background: rgba(255,0,0,0.06); color: #ffb3b3; }
-    `;
-    document.head.appendChild(s);
-  }
-
-  // Append a delete button into a template row element (id = template.id)
-  function appendDeleteButtonToRow(rowEl, templateId) {
-    if (!rowEl || !templateId) return;
-    // avoid adding twice
-    if (rowEl.querySelector(`.mm-delete-btn[data-id="${templateId}"]`)) return;
-
-    const btn = document.createElement('button');
-    btn.className = 'mm-delete-btn';
-    btn.type = 'button';
-    btn.textContent = 'Delete';
-    btn.dataset.id = templateId;
-
-    // place the delete button into the row's right-side container if present, otherwise append
-    const rightContainer = rowEl.querySelector('div:last-child');
-    if (rightContainer) rightContainer.appendChild(btn);
-    else rowEl.appendChild(btn);
-  }
-
-  // Walk the templates list and add delete buttons for each template row
-  async function enhanceRows() {
-    const list = document.getElementById('mm-templates-list');
-    if (!list) return;
-    // Each row was created by TemplatesManager.refreshUI as a direct child
-    const rows = Array.from(list.children);
-    if (!rows.length) return;
-
-    // For each row, try to extract the template id from the existing select button or data attribute
-    rows.forEach((row) => {
-      // Prefer an existing select button with data-id
-      const selectBtn = row.querySelector('.mm-select-btn[data-id]');
-      const dataId = selectBtn ? selectBtn.getAttribute('data-id') : null;
-
-      // If no select button, try to find any element with data-id
-      const anyWithId = row.querySelector('[data-id]');
-      const id = dataId || (anyWithId ? anyWithId.getAttribute('data-id') : null);
-
-      // If still no id, try to parse from innerHTML (last resort)
-      let templateId = id;
-      if (!templateId) {
-        const match = row.innerHTML.match(/data-id="([^"]+)"/);
-        if (match) templateId = match[1];
-      }
-
-      if (templateId) appendDeleteButtonToRow(row, templateId);
-    });
-  }
-
-  // Event delegation: handle clicks on delete buttons
-  function attachDelegatedHandler() {
-    const list = document.getElementById('mm-templates-list');
-    if (!list) return;
-    // Avoid attaching twice
-    if (list._mm_delete_handler_attached) return;
-    list._mm_delete_handler_attached = true;
-
-    list.addEventListener('click', async (ev) => {
-      const btn = ev.target.closest('.mm-delete-btn');
-      if (!btn) return;
-      ev.preventDefault();
-      const id = btn.dataset.id;
-      if (!id) return;
-
-      // Confirm deletion (simple confirm; replace with custom modal if desired)
-      const ok = confirm('Delete this template? This action cannot be undone.');
-      if (!ok) return;
-
-      try {
-        const s = await Storage.load();
-        const beforeCount = s.templates.length;
-        s.templates = s.templates.filter((t) => t.id !== id);
-        if (s.selectedTemplateId === id) s.selectedTemplateId = s.templates.length ? s.templates[0].id : null;
-        await Storage.save(s);
-
-        // Refresh templates UI (TemplatesManager.refreshUI should exist)
-        if (typeof TemplatesManager.refreshUI === 'function') {
-          await TemplatesManager.refreshUI();
-        } else {
-          // fallback: rebuild rows manually
-          await enhanceRows();
-        }
-
-        UI.showToast('Template deleted');
-      } catch (err) {
-        console.error('TemplateDeleteButtons: delete error', err);
-        UI.showToast('Failed to delete template');
-      }
-    });
-  }
-
-  // Monkey-patch TemplatesManager.refreshUI to append delete buttons after it runs
-  function patchRefreshUI() {
-    if (!TemplatesManager || typeof TemplatesManager.refreshUI !== 'function') return;
-    if (TemplatesManager._mm_refresh_patched) return;
-    TemplatesManager._mm_refresh_patched = true;
-
-    const original = TemplatesManager.refreshUI.bind(TemplatesManager);
-    TemplatesManager.refreshUI = async function patchedRefreshUI(...args) {
-      const res = await original(...args);
-      // small delay to ensure DOM is updated
-      setTimeout(() => {
-        enhanceRows();
-      }, 8);
-      return res;
-    };
-  }
-
-  // Public install function
-  function install() {
-    injectStyles();
-    patchRefreshUI();
-    // attach handler to list (if list exists now or later)
-    // try immediate attach; if list not present, wait briefly and try again
-    const tryAttach = () => {
-      const list = document.getElementById('mm-templates-list');
-      if (list) {
-        attachDelegatedHandler();
-        enhanceRows();
-      } else {
-        // try again after a short delay (settings panel may not be built yet)
-        setTimeout(tryAttach, 150);
-      }
-    };
-    tryAttach();
-  }
-
-  return { install, enhanceRows };
-})(Storage, UI, TemplatesManager);
-
-// Install the delete-button module (call once)
-TemplateDeleteButtons.install();
 
     async function refreshUI() {
-      const s = await Storage.load();
-      const list = document.getElementById('mm-templates-list');
-      if (!list) return;
-      list.innerHTML = '';
-      s.templates.forEach((tpl) => {
-        const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
-        row.style.padding = '6px';
-        row.style.borderBottom = '1px solid #111';
-        row.innerHTML = `<div style="flex:1;cursor:pointer;"><div style="font-weight:700;color:#cfc">${tpl.name}</div><div style="font-size:12px;color:#999">${tpl.subject || '(no subject)'}</div></div><div style="margin-left:8px;"><button class="mm-select-btn" data-id="${tpl.id}">Select</button></div>`;
-        list.appendChild(row);
-      });
-      list.querySelectorAll('.mm-select-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          const s = await Storage.load();
-          s.selectedTemplateId = id;
-          await Storage.save(s);
-          const tpl = s.templates.find(t => t.id === id);
-          if (tpl) {
-            document.getElementById('mm-template-name').value = tpl.name;
-            document.getElementById('mm-template-subject').value = tpl.subject;
-            document.getElementById('mm-template-body').value = tpl.body;
-          }
-          UI.showToast('Template selected');
-        });
-      });
+      try {
+        const s = await Storage.load();
+        const list = document.getElementById('mm-templates-list');
+        if (!list) return;
+        list.innerHTML = '';
+        // Build rows deterministically and include per-row Delete button
+        s.templates.forEach((tpl) => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.justifyContent = 'space-between';
+          row.style.alignItems = 'center';
+          row.style.padding = '6px';
+          row.style.borderBottom = '1px solid #111';
 
-      const panel = document.getElementById('mm-settings-panel');
-      if (!panel) return;
-      panel.querySelector('#mm-enabled-checkbox').checked = !!s.enabled;
-      panel.querySelector('#mm-autoapply-checkbox').checked = !!s.autoApplyOnOpen;
-      if (s.selectedTemplateId) {
-        const tpl = s.templates.find(t => t.id === s.selectedTemplateId);
-        if (tpl) {
-          panel.querySelector('#mm-template-name').value = tpl.name;
-          panel.querySelector('#mm-template-subject').value = tpl.subject;
-          panel.querySelector('#mm-template-body').value = tpl.body;
-        }
-      }
-      const quick = document.getElementById('mm-quick-select');
-      if (quick) {
-        quick.innerHTML = '';
-        s.templates.forEach(t => {
-          const opt = document.createElement('option');
-          opt.value = t.id;
-          opt.textContent = t.name;
-          quick.appendChild(opt);
+          // left side: name + subject
+          const left = document.createElement('div');
+          left.style.flex = '1';
+          left.style.cursor = 'pointer';
+          left.innerHTML = `<div style="font-weight:700;color:#cfc">${tpl.name}</div><div style="font-size:12px;color:#999">${tpl.subject || '(no subject)'}</div>`;
+
+          // right side container (select + delete)
+          const right = document.createElement('div');
+          right.style.marginLeft = '8px';
+          right.style.display = 'flex';
+          right.style.gap = '6px';
+          right.style.alignItems = 'center';
+
+          // Select button
+          const selectBtn = document.createElement('button');
+          selectBtn.className = 'mm-select-btn';
+          selectBtn.dataset.id = tpl.id;
+          selectBtn.textContent = 'Select';
+          selectBtn.addEventListener('click', async () => {
+            const s2 = await Storage.load();
+            s2.selectedTemplateId = tpl.id;
+            await Storage.save(s2);
+            const panel = document.getElementById('mm-settings-panel');
+            if (panel) {
+              const nameEl = panel.querySelector('#mm-template-name');
+              const subjEl = panel.querySelector('#mm-template-subject');
+              const bodyEl = panel.querySelector('#mm-template-body');
+              if (nameEl) nameEl.value = tpl.name;
+              if (subjEl) subjEl.value = tpl.subject;
+              if (bodyEl) bodyEl.value = tpl.body;
+            }
+            UI.showToast('Template selected');
+          });
+
+          // Delete button
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'mm-delete-btn';
+          deleteBtn.type = 'button';
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (!confirm('Delete this template? This action cannot be undone.')) return;
+            try {
+              const s3 = await Storage.load();
+              s3.templates = s3.templates.filter(t => t.id !== tpl.id);
+              if (s3.selectedTemplateId === tpl.id) s3.selectedTemplateId = s3.templates.length ? s3.templates[0].id : null;
+              await Storage.save(s3);
+              await refreshUI();
+              UI.showToast('Template deleted');
+            } catch (err) {
+              console.error('Delete template error', err);
+              UI.showToast('Failed to delete template');
+            }
+          });
+
+          right.appendChild(selectBtn);
+          right.appendChild(deleteBtn);
+          row.appendChild(left);
+          row.appendChild(right);
+          list.appendChild(row);
         });
-        if (s.selectedTemplateId) quick.value = s.selectedTemplateId;
+
+        // Update settings panel fields and quick picker
+        const panel = document.getElementById('mm-settings-panel');
+        if (!panel) return;
+        panel.querySelector('#mm-enabled-checkbox').checked = !!s.enabled;
+        panel.querySelector('#mm-autoapply-checkbox').checked = !!s.autoApplyOnOpen;
+        if (s.selectedTemplateId) {
+          const tpl = s.templates.find(t => t.id === s.selectedTemplateId);
+          if (tpl) {
+            panel.querySelector('#mm-template-name').value = tpl.name;
+            panel.querySelector('#mm-template-subject').value = tpl.subject;
+            panel.querySelector('#mm-template-body').value = tpl.body;
+          }
+        }
+        const quick = document.getElementById('mm-quick-select');
+        if (quick) {
+          quick.innerHTML = '';
+          s.templates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            quick.appendChild(opt);
+          });
+          if (s.selectedTemplateId) quick.value = s.selectedTemplateId;
+        }
+      } catch (err) {
+        console.error('TemplatesManager.refreshUI error', err);
       }
     }
 
@@ -752,7 +647,7 @@ TemplateDeleteButtons.install();
       UI.showToast('Template inserted into compose fields');
     }
 
-    return { init, refreshUI };
+    return { init, refreshUI, saveTemplate, deleteTemplate, insertSelectedIntoCompose };
   })(Storage, Utils, UI);
 
   /* ===========================
@@ -787,7 +682,7 @@ TemplateDeleteButtons.install();
         try {
           const el = root.querySelector(sel);
           if (el) return el;
-        } catch (err) {}
+        } catch (err) { /* ignore invalid selector */ }
       }
       return null;
     }
@@ -956,20 +851,33 @@ TemplateDeleteButtons.install();
         await FloatingButton.init(state);
         await TemplatesManager.init();
         await ComposeIntegration.init();
+
         if (typeof GM_registerMenuCommand === 'function') {
           GM_registerMenuCommand('Open MessageManager Settings', () => {
             const panel = document.getElementById('mm-settings-panel');
             if (panel) panel.classList.add('open');
           });
         }
-        console.info('MessageManager modular init complete (v1.3.5)');
+
+        // Ensure quick picker is populated if on compose already
+        if (location.pathname.includes('/messages.php') && location.hash.includes('/p=compose')) {
+          setTimeout(() => {
+            TemplatesManager.refreshUI();
+          }, 600);
+        }
+
+        console.info('MessageManager modular init complete (v1.3.8)');
       } catch (err) {
         console.error('Core.init error', err);
-        TemplateDeleteButtons.install();
       }
     }
     return { init };
   })(UI, Storage, FloatingButton, TemplatesManager, ComposeIntegration);
 
+  // Start
   Core.init();
+
+  /* ===========================
+     End of script
+     =========================== */
 })();
