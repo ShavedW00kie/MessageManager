@@ -6,8 +6,6 @@
 // @author       ShavedW00kie (Torn: ThaWookie [2954173])
 // @homepageURL  https://github.com/ShavedW00kie/MessageManager
 // @supportURL   https://github.com/ShavedW00kie/MessageManager/issues
-// @downloadURL  https://greasyfork.org/scripts/XXXXX/code/MessageManager.user.js
-// @updateURL    https://greasyfork.org/scripts/XXXXX/code/MessageManager.user.js
 // @license      BSD-3-Clause
 // @match        https://www.torn.com/messages.php*
 // @grant        GM_getValue
